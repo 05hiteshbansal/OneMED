@@ -9,19 +9,20 @@ const nodemailer = require("nodemailer");
 const cloudinary = require("cloudinary").v2;
 const expressFile = require("express-fileupload");
 const user = require("../models/User");
+const userotp = require("../models/userOTP");
 
 const saltRounds = 10;
 
 const uri = process.env.mongoURL;
 
 // email config
-// const transporter = nodemailer.createTransport({
-//   service: "gmail",
-//   auth: {
-//     user: process.env.EMAIL,
-//     pass: process.env.PASSWORD,
-//   },
-// });
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL,
+    pass: process.env.PASSWORD,
+  },
+});
 
 mongoose
   .connect(uri)
@@ -110,6 +111,11 @@ async function generateAuthToken(id) {
 
 router.post("/signup", async (req, res) => {
   var encryptedPassword = await bcrypt.hash(req.body.password, saltRounds);
+  const query = { email: req.body.email };
+  const duplicateUser = await findUser(query);
+  if (duplicateUser !== null) {
+    res.send({ Success: false, msg: "Already registered" });
+  }
   const newUser = new user({
     name: req.body.name,
     password: encryptedPassword,
@@ -118,23 +124,16 @@ router.post("/signup", async (req, res) => {
   });
 
   const token = await generateAuthToken(newUser.__vid);
-  const query = { email: req.body.email };
 
-  const duplicateUser = await findUser(query);
+  const userSave = {
+    name: req.body.name,
+    password: encryptedPassword,
+    email: req.body.email,
+    location: req.body.location,
+  };
 
-  if (duplicateUser !== null) {
-    res.send({ Success: false, msg: "Already registered" });
-  } else {
-    const userSave = {
-      name: req.body.name,
-      password: encryptedPassword,
-      email: req.body.email,
-      location: req.body.location,
-    };
-
-    await insertUser(userSave);
-    res.send({ Success: true, msg: "Successfully registered" });
-  }
+  await insertUser(userSave);
+  res.send({ Success: true, msg: "Successfully registered" });
 });
 
 router.post("/login", async (req, res) => {
@@ -185,70 +184,69 @@ router.post("/pdfSubmit/:id", async (req, res) => {
   return res.json({ msg: "Pdf submitted" });
 });
 
-// router.post("/user/sendotp", async (req, res) => {
-//   const query = { email: req.body.email };
-//   const emailFind = await findUser(query);
+router.post("/user/sendotp", async (req, res) => {
+  const query = { email: req.body.email };
+  const emailFind = await findUser(query);
 
-//   const UserFound = await findUser(query);
-//   if (UserFound) {
-//     const OTP = Math.floor(100000 + Math.random() * 900000);
-//     const existEmail = await userotp.findOne({ email: req.body.email });
+  const UserFound = await findUser(query);
+  if (UserFound) {
+    const OTP = Math.floor(100000 + Math.random() * 900000);
+    const existEmail = await userotp.findOne({ email: req.body.email });
 
-//     if (existEmail) {
-//       const updateData = await userotp.updateOne(
-//         { email: req.body.email },
-//         { $set: { otp: OTP } },
-//         { new: true }
-//       );
-//       const mailOptions = {
-//         from: process.env.EMAIL,
-//         to: req.body.email,
-//         subject: "Sending EMAIL for OTP Validation",
-//         text: `OTP: ${OTP}`,
-//       };
-//       await transporter.sendMail(mailOptions, (err, info) => {
-//         if (err) {
-//           console.log(err);
-//         } else {
-//           console.log("Email Sent");
-//         }
-//       });
-//       res.send({
-//         Success: true,
-//         user: emailFind,
-//         AuthToken: emailFind.tokens.token,
-//         otp: OTP,
-//       });
-//     } else {
-//       const saveOtpData = new userotp({
-//         email: req.body.email,
-//         otp: OTP,
-//       });
-//       await saveOtpData.save();
-//       const mailOptions = {
-//         from: process.env.EMAIL,
-//         to: req.body.email,
-//         subject: "Sending EMAIL for OTP Validation",
-//         text: `OTP: ${OTP}`,
-//       };
-//       await transporter.sendMail(mailOptions, (err, info) => {
-//         if (err) {
-//           console.log(err);
-//         } else {
-//           console.log("Email Sent");
-//         }
-//       });
-//       res.send({
-//         Success: true,
-//         user: emailFind,
-//         AuthToken: emailFind.tokens.token,
-//         otp: OTP,
-//       });
-//     }
-//   } else {
-//     res.send({ Success: false });
-//   }
-// });
+    if (existEmail) {
+      const updateData = await userotp.updateOne(
+        { email: req.body.email },
+        { $set: { otp: OTP } },
+        { new: true }
+      );
+      const mailOptions = {
+        from: process.env.EMAIL,
+        to: req.body.email,
+        subject: "Sending EMAIL for OTP Validation",
+        text: `OTP: ${OTP}`,
+      };
+      await transporter.sendMail(mailOptions, (err, info) => {
+        if (err) {
+          console.log(err);
+        } else {
+          console.log("Email Sent");
+        }
+      });
+      res.send({
+        Success: true,
+        user: emailFind,
+        otp: OTP,
+      });
+    } else {
+      const saveOtpData = new userotp({
+        email: req.body.email,
+        otp: OTP,
+      });
+      await saveOtpData.save();
+      const mailOptions = {
+        from: process.env.EMAIL,
+        to: req.body.email,
+        subject: "Sending EMAIL for OTP Validation",
+        text: `OTP: ${OTP}`,
+      };
+      await transporter.sendMail(mailOptions, (err, info) => {
+        if (err) {
+          console.log(err);
+        } else {
+          console.log("Email Sent");
+        }
+      });
+      res.send({
+        Success: true,
+        user: emailFind,
+        AuthToken: emailFind.tokens.token,
+        otp: OTP,
+      });
+    }
+  } else {
+    res.send({ Success: false });
+  }
+});
 
 // router.post("/api/create-checkout-session", async (req, res) => {
 //   const { data } = req.body;

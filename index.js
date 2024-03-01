@@ -2,7 +2,6 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const expressFile = require("express-fileupload");
 const fileUpload = require("express-fileupload");
 const port = 3000;
 
