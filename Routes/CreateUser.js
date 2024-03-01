@@ -111,11 +111,6 @@ async function generateAuthToken(id) {
 
 router.post("/signup", async (req, res) => {
   var encryptedPassword = await bcrypt.hash(req.body.password, saltRounds);
-  const query = { email: req.body.email };
-  const duplicateUser = await findUser(query);
-  if (duplicateUser !== null) {
-    res.send({ Success: false, msg: "Already registered" });
-  }
   const newUser = new user({
     name: req.body.name,
     password: encryptedPassword,
@@ -123,17 +118,24 @@ router.post("/signup", async (req, res) => {
     location: req.body.location,
   });
 
-  const token = await generateAuthToken(newUser.__vid);
+  const token = await generateAuthToken(newUser._id);
+  const query = { email: req.body.email };
 
-  const userSave = {
-    name: req.body.name,
-    password: encryptedPassword,
-    email: req.body.email,
-    location: req.body.location,
-  };
+  const duplicateUser = await findUser(query);
 
-  await insertUser(userSave);
-  res.send({ Success: true, msg: "Successfully registered" });
+  if (duplicateUser !== null) {
+    res.send({ Success: false, msg: "Already registered" });
+  } else {
+    const userSave = {
+      name: req.body.name,
+      password: encryptedPassword,
+      email: req.body.email,
+      location: req.body.location,
+    };
+
+    await insertUser(userSave);
+    res.send({ Success: true, msg: "Successfully signed up", token: token });
+  }
 });
 
 router.post("/login", async (req, res) => {
@@ -239,7 +241,6 @@ router.post("/user/sendotp", async (req, res) => {
       res.send({
         Success: true,
         user: emailFind,
-        AuthToken: emailFind.tokens.token,
         otp: OTP,
       });
     }
