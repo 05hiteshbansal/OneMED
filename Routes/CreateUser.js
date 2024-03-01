@@ -6,7 +6,7 @@ const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const stripe = require("stripe")(process.env.STRIPE_KEY);
 const nodemailer = require("nodemailer");
-const cloudinary = require("cloudinary");
+const cloudinary = require("cloudinary").v2;
 const expressFile = require("express-fileupload");
 const user = require("../models/User");
 
@@ -116,7 +116,7 @@ router.post("/signup", async (req, res) => {
     email: req.body.email,
     location: req.body.location,
   });
-  console.log(newUser);
+
   const token = await generateAuthToken(newUser.__vid);
   const query = { email: req.body.email };
 
@@ -160,19 +160,29 @@ router.post("/login", async (req, res) => {
 router.post("/pdfSubmit/:id", async (req, res) => {
   const { id } = req.params;
   const foundUser = await user.findById(id);
-
+  console.log(foundUser.pdf);
   if (!user) {
     return res.status(404).json({ msg: "User not found" });
   }
+  const file = req.files.image;
+  const title = req.body.title;
+  const result = await cloudinary.uploader.upload(file.tempFilePath, {
+    public_id: `${Date.now()}`,
+    resource_type: "auto",
+    folder: "images",
+  });
+
   const pdfArray = foundUser.pdf;
-  pdfArray.push();
+  const pdfObject = {
+    title: title,
+    url: result.url,
+  };
+  pdfArray.push(pdfObject);
   let filter = { email: foundUser.email };
   let update = { pdf: pdfArray };
-  await updateUser();
-  // return res.json(user);
-
-  // console.error(error);
-  // return res.status(500).json({ message: "Server error" });
+  console.log(pdfArray);
+  await updateUser(filter, update);
+  return res.json({ msg: "Pdf submitted" });
 });
 
 // router.post("/user/sendotp", async (req, res) => {
